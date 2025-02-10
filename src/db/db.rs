@@ -86,7 +86,11 @@ impl TimedData {
     }
 }
 
+/**
+ * 实际存储的数据对象
+ */
 pub struct Db {
+    //实际存储数据的地方
     pub databases: Vec<AHashMap<String, TimedData>>,
     pub rudis_config: Arc<RudisConfig>,
 }
@@ -99,8 +103,8 @@ impl Db {
      * @param rudis_config 配置文件
      */
     pub fn new(rudis_config: Arc<RudisConfig>) -> Db {
-        let mut databases = Vec::new();
-
+        let mut databases: Vec<AHashMap<String, TimedData>> = Vec::new();
+        //根据databases的数量，建多个数据库 ,主要是用来分担读写的压力
         for _ in 0..rudis_config.databases {
             databases.push(AHashMap::new());
         }

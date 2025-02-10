@@ -50,7 +50,7 @@ impl Aof {
     }
 
     /*
-     * 解析 appendfile 文件，执行命令，回填数据
+     * 解析 appendfile 文件，执行命令加载数据
      *
      * 调用时机：项目启动
      */
@@ -59,33 +59,41 @@ impl Aof {
             if let Some(filename) = &self.rudis_config.appendfilename {
                 let base_path = &self.rudis_config.dir;
                 let file_path = format!("{}{}", base_path, filename);
+                //遍历aof的文件
                 if let Ok(mut file) = File::open(file_path) {
                     use std::io::{BufRead, BufReader};
-                    let line_count = BufReader::new(&file).lines().count() as u64;
+                    //读取文件的行数
+                    let line_count: u64 = BufReader::new(&file).lines().count() as u64;
                     let command_strategies = init_command_strategies();
+                    //session hashmap
                     let sessions: Arc<Mutex<AHashMap<String, Session>>> = Arc::new(Mutex::new(AHashMap::new()));
                     let session_id = "0.0.0.0:0";
 
                     {
+                        //获取锁
                         let mut sessions_ref = sessions.lock();
                         let mut session = Session::new();
                         session.set_selected_database(0);
                         session.set_authenticated(true);
                         sessions_ref.insert(session_id.to_string(), session);
                     }
-
+                    //从0把offset设置成0
                     if file.seek(SeekFrom::Start(0)).is_ok() {
+                        //进度条
                         let pb = ProgressBar::new(line_count);
                         pb.set_style(ProgressStyle::default_bar().template("[{bar:39.green/cyan}] percent: {percent}% lines: {pos}/{len}").progress_chars("=>-"));
-                        let reader = BufReader::new(&mut file);
+                        let reader: BufReader<&mut File> = BufReader::new(&mut file);
                         for line in reader.lines() {
                             if let Ok(operation) = line {
+                                //解析命令
                                 let fragments: Vec<&str> = operation.split("\\r\\n").collect();
                                 let command = fragments[2];
+                                //获取命令对应的实现类，然后执行方法
                                 if let Some(strategy) = command_strategies.get(command.to_uppercase().as_str()) {
                                     strategy.execute(None, &fragments, &self.db, &self.rudis_config, &sessions,session_id);
                                 }
                             }
+                            //进度条+1
                             pb.inc(1);
                         }
                         pb.finish();

@@ -7,14 +7,16 @@ use std::fs;
  * @param port 端口
  * @param password 密码
  * @param maxclients 客户端上限
- * @param databases 初始化数据库
- * @param appendfilename 命令持久化文件
+ * @param databases 初始化数据库的数量
+ * @param appendfilename 命令持久化文件的文件名
  * @param appendonly 是否开启持久化
+ * @param dbfilename 是rdb的文件
  */
 pub struct RudisConfig {
     pub bind: String,
     pub port: u16,
     pub password: Option<String>,
+
     pub databases: usize,
     pub dbfilename: Option<String>,
     pub appendfilename: Option<String>,
@@ -23,6 +25,7 @@ pub struct RudisConfig {
     pub appendfsync: Option<String>,
     pub maxclients: usize,
     pub save: Option<Vec<(u64, u64)>>,
+    //目录
     pub dir: String,
 }
 

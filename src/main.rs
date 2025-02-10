@@ -1,8 +1,8 @@
+use parking_lot::Mutex;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::process::id;
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 use clap::Parser;
 use session::session_manager::SessionManager;
@@ -27,10 +27,8 @@ use crate::db::db_config::RudisConfig;
 use crate::interface::command_type::CommandType;
 use crate::persistence::aof::Aof;
 
-
 #[tokio::main]
 async fn main() {
-
     // 启动参数解析
     let cli = crate::tools::cli::Cli::parse();
 
@@ -61,8 +59,13 @@ async fn main() {
         }
     };
     let db = Arc::new(Mutex::new(Db::new(rudis_config.clone())));
+    //Redis AOF（Append-Only File）是一种持久化机制，它通过将对数据库的所有写操作追加到一个日志文件中来实现数据持久化
     let aof = Arc::new(Mutex::new(Aof::new(rudis_config.clone(), db.clone())));
-    let rdb = Arc::new(Mutex::new(Rdb::new(rudis_config.clone(), db.clone())));
+    //Redis 的 RDB（Redis Database） 持久化方式是通过定期生成数据库的快照来实现持久化存储的。与 AOF（Append-Only File）不同，
+    //RDB 不是通过记录每个写命令来持久化数据，而是通过在指定的时间间隔内保存当前数据库的状态（快照）来实现
+    let rdb: Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, Rdb>> =
+        Arc::new(Mutex::new(Rdb::new(rudis_config.clone(), db.clone())));
+    //会话信息管理
     let session_manager = Arc::new(SessionManager::new(rudis_config.clone()));
     let listener = TcpListener::bind(socket_addr).unwrap();
 
@@ -95,7 +98,9 @@ async fn main() {
     let arc_rdb_count = Arc::new(Mutex::new(RdbCount::new()));
     let arc_rdb_scheduler = Arc::new(Mutex::new(RdbScheduler::new(rdb)));
     if let Some(save_interval) = &rudis_config.save {
-        arc_rdb_scheduler.lock().execute(save_interval.clone(), arc_rdb_count.clone());
+        arc_rdb_scheduler
+            .lock()
+            .execute(save_interval.clone(), arc_rdb_count.clone());
     }
 
     for stream in listener.incoming() {
@@ -105,7 +110,8 @@ async fn main() {
                 let rudis_config_clone = Arc::clone(&rudis_config);
                 let session_manager_clone = Arc::clone(&session_manager);
                 let rdb_count_clone = Arc::clone(&arc_rdb_count);
-                let aof_clone = Arc::clone(&aof);
+                let aof_clone: Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, Aof>> =
+                    Arc::clone(&aof);
                 tokio::spawn(async move {
                     connection(
                         stream,
@@ -134,8 +140,7 @@ async fn connection(
     rdb_count: Arc<Mutex<RdbCount>>,
     aof: Arc<Mutex<Aof>>,
 ) {
-
-    /* 
+    /*
      * 声明变量
      *
      * command_strategies 命令集
@@ -144,7 +149,8 @@ async fn connection(
      * buff_list 完整消息
      * read_size 总读取长度
      */
-    let command_strategies = init_command_strategies();
+    let command_strategies: std::collections::HashMap<&str, Box<dyn CommandStrategy>> =
+        init_command_strategies();
     let session_id = stream.peer_addr().unwrap().to_string();
     let mut buff = [0; 512];
     let mut buff_list = Vec::new();
@@ -176,7 +182,6 @@ async fn connection(
                 read_size += size;
 
                 if size < 512 {
-                    
                     /*
                      * 解析命令
                      *
@@ -219,10 +224,9 @@ async fn connection(
                      */
                     let uppercase_command = command.to_uppercase();
                     if let Some(strategy) = command_strategies.get(uppercase_command.as_str()) {
-                        
                         /*
                          * 执行命令
-                         * 
+                         *
                          * @param stream 流
                          * @param db
                          * @param rudis_config 配置文件
@@ -247,7 +251,6 @@ async fn connection(
                             aof.lock().save(&fragments.join("\\r\\n"));
                         }
                     } else {
-
                         // 未知的命令
                         let response_value = "PONG".to_string();
                         let response_bytes = &RespValue::SimpleString(response_value).to_bytes();
