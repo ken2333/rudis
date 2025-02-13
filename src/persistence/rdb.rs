@@ -100,6 +100,7 @@ impl Rdb {
                             .template("[{bar:39.green/cyan}] percent: {percent}% lines: {pos}/{len}")
                             .progress_chars("=>-"),
                     );
+                    //读取rdb文件
                     let reader = BufReader::new(&mut file);
                     for line in reader.lines() {
                         if let Ok(operation) = line {

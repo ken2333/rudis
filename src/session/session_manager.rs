@@ -25,6 +25,7 @@ impl SessionManager {
     // 创建会话的方法
     pub fn create_session(&self, session_id: String) -> bool {
         let mut sessions_ref = self.sessions.lock();
+        //判断是否超过最大客户端数量
         if self.config.maxclients == 0 || sessions_ref.len() < self.config.maxclients {
             sessions_ref.insert(session_id, Session::new());
             true

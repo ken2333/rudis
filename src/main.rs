@@ -1,3 +1,4 @@
+use interface::command_strategy::CommandStrategy;
 use parking_lot::Mutex;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -74,6 +75,7 @@ async fn main() {
     // 数据恢复
     if rudis_config.appendonly {
         log::info!("Start performing AOF recovery");
+        //读取文件回复数据
         aof.lock().load();
     } else {
         log::info!("Start performing RDB recovery");
@@ -86,7 +88,7 @@ async fn main() {
     let rc = Arc::clone(&db);
     let rcc = Arc::clone(&rudis_config);
 
-    // 检测过期
+    // 在一个子线程中不断的监控过期的键值对
     tokio::spawn(async move {
         loop {
             rc.lock().check_all_database_ttl();
@@ -94,15 +96,18 @@ async fn main() {
         }
     });
 
-    // 保存策略
-    let arc_rdb_count = Arc::new(Mutex::new(RdbCount::new()));
+    // 保存策略 
+    //计算保存的次数，如果次数满足则进行rdb.save()
+    let arc_rdb_count: Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, RdbCount>> = Arc::new(Mutex::new(RdbCount::new())); 
     let arc_rdb_scheduler = Arc::new(Mutex::new(RdbScheduler::new(rdb)));
     if let Some(save_interval) = &rudis_config.save {
         arc_rdb_scheduler
             .lock()
             .execute(save_interval.clone(), arc_rdb_count.clone());
+        
     }
 
+    //开始接受请求连接和处理请求
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
@@ -110,8 +115,8 @@ async fn main() {
                 let rudis_config_clone = Arc::clone(&rudis_config);
                 let session_manager_clone = Arc::clone(&session_manager);
                 let rdb_count_clone = Arc::clone(&arc_rdb_count);
-                let aof_clone: Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, Aof>> =
-                    Arc::clone(&aof);
+                let aof_clone: Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, Aof>> =Arc::clone(&aof);
+                    //异步处理
                 tokio::spawn(async move {
                     connection(
                         stream,
@@ -151,6 +156,7 @@ async fn connection(
      */
     let command_strategies: std::collections::HashMap<&str, Box<dyn CommandStrategy>> =
         init_command_strategies();
+    //以远程地址和端口号作为session_id
     let session_id = stream.peer_addr().unwrap().to_string();
     let mut buff = [0; 512];
     let mut buff_list = Vec::new();
@@ -174,10 +180,11 @@ async fn connection(
     'main: loop {
         match stream.read(&mut buff) {
             Ok(size) => {
+                //读取完毕退出
                 if size == 0 {
                     break 'main;
                 }
-
+                //把值添加到末尾
                 buff_list.extend_from_slice(&buff[..size]);
                 read_size += size;
 

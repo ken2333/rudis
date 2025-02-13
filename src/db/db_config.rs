@@ -21,6 +21,7 @@ pub struct RudisConfig {
     pub dbfilename: Option<String>,
     pub appendfilename: Option<String>,
     pub appendonly: bool,
+    //表示每秒钟进行多少次检查
     pub hz: u64,
     pub appendfsync: Option<String>,
     pub maxclients: usize,
@@ -127,11 +128,12 @@ fn parse_config_line(line: &str) -> Option<(&str, &str)> {
         None
     }
 }
-
+//解析快照的规则
 fn parse_save(value: &str) -> Option<Vec<(u64, u64)>> {
     let mut vec = Vec::new();
     let parts = value.split_whitespace();
     for part in parts {
+        //以 '/'为分隔符
         if let Some(pos) = part.find('/') {
             if let (Ok(i), Ok(c)) = (part[..pos].parse(), part[pos + 1..].parse()) {
                 vec.push((i, c));

@@ -40,8 +40,8 @@ impl CommandStrategy for SetCommand {
                 return;
             }
         };
-
-        let key = match fragments.get(4) {
+        //获取key
+        let key: String = match fragments.get(4) {
             Some(fragment) => fragment.to_string(),
             None => {
                 if let Some(stream) = stream { 
@@ -56,7 +56,7 @@ impl CommandStrategy for SetCommand {
                 return;
             },
         };
-
+        //获取value
         let value = match fragments.get(6) {
             Some(fragment) => fragment.to_string(),
             None => {
@@ -73,10 +73,13 @@ impl CommandStrategy for SetCommand {
             },
         };
 
+        //NX：只有在键不存在时才设置（可选）。如果键已经存在，命令将不执行任何操作。
+        //检测NX命令
         for (index, fragment) in fragments.iter().enumerate() {
             if fragment.to_uppercase() == "NX" {
                 if index != 4 && index != 6 {
-                    let is_exists = db_ref.exists(db_index, &key);
+                    //检查是key是否存在
+                    let is_exists: bool = db_ref.exists(db_index, &key);
                     if is_exists {
                         if let Some(stream) = stream {
                             let response_bytes = &RespValue::Null.to_bytes();
@@ -92,9 +95,10 @@ impl CommandStrategy for SetCommand {
                 }
             }
         }
-
+        //XX：只有在键存在时才设置（可选）。如果键不存在，命令将不执行任何操作。
         for (index, fragment) in fragments.iter().enumerate() {
             if fragment.to_uppercase() == "XX" {
+                //排除 key和valeu=XX的情况
                 if index != 4 && index != 6 {
                     let is_exists = db_ref.exists(db_index, &key);
                     if !is_exists{
@@ -116,6 +120,8 @@ impl CommandStrategy for SetCommand {
         let mut ttl_index = None;
         let mut ttl_unit = None;
 
+        //EX seconds：设置键的过期时间，单位为秒（可选）。
+        //PX milliseconds：设置键的过期时间，单位为毫秒（可选）。
         for (index, f) in fragments.iter().enumerate().rev() {
             if index > 6 {
                 if f.to_uppercase().eq_ignore_ascii_case("PX") || 
@@ -127,6 +133,7 @@ impl CommandStrategy for SetCommand {
             }
         }
 
+        //计算存活时间
         let mut expire_at = -1;
         if let Some(ttl_index) = ttl_index {
             if let Some(ttl_str) = fragments.get(ttl_index + 2) {
@@ -139,11 +146,12 @@ impl CommandStrategy for SetCommand {
                 }
             }
         }
-
+        //最后设置值
         db_ref.set_with_ttl(db_index, key.clone(), value.clone(), expire_at);
 
         if let Some(stream) = stream { 
             let response_bytes = &RespValue::Ok.to_bytes();
+            //返回结果
             match stream.write(response_bytes) {
                 Ok(_bytes_written) => {},
                 Err(e) => {

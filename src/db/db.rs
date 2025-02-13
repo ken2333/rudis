@@ -466,7 +466,9 @@ impl Db {
         for database in self.databases.iter_mut() {
             let mut expired_keys = HashSet::new();
             for (key, value) in database.iter() {
+                //判断是否过期
                 if value.is_expired() {
+                    //插入到过期列表中，后面变量删除
                     expired_keys.insert(key.clone());
                 }
             }

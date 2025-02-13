@@ -27,6 +27,7 @@ impl CommandStrategy for SaddCommand {
     ) {
         let mut db_ref = db.lock();
 
+        //获取存储的db_index
         let db_index = {
             let sessions_ref = sessions.lock();
             if let Some(session) = sessions_ref.get(session_id) {
@@ -35,7 +36,7 @@ impl CommandStrategy for SaddCommand {
                 return;
             }
         };
-
+        //获取key
         let key = fragments[4].to_string();
         let members: Vec<String> = fragments[6..].iter().enumerate().filter(|(i, _)| *i % 2 == 0).map(|(_, &x)| x.to_string()).collect();
         
